@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.4">
+  <header
+    creationtool="TestGenerator"
+    creationtoolversion="1.0"
+    segtype="sentence"
+    adminlang="en"
+    srclang="en"
+    datatype="PlainText"
+  />
+  <body>
+
+    <tu>
+      <tuv xml:lang="en">
+        <seg>Hello</seg>
+      </tuv>
+      <tuv xml:lang="fr">
+        <seg>Bonjour</seg>
+      </tuv>
+    </tu>
+
+    <tu>
+      <tuv xml:lang="en">
+        <seg>How are you</seg>
+      </tuv>
+      <tuv xml:lang="fr">
+        <seg>Comment ça va</seg>
+      </tuv>
+    </tu>
+
+    <tu>
+      <tuv xml:lang="en">
+        <seg>Thank you</seg>
+      </tuv>
+      <tuv xml:lang="fr">
+        <seg>Merci</seg>
+      </tuv>
+    </tu>
+
+  </body>
+</tmx>
