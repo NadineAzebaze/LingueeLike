@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Dictionnaire bilingue</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body {
+            background: #f7f7f9;
+        }
+    </style>
+
+    <script>
+        async function doSearch() {
+    const q = document.getElementById("query").value;
+    const lang = document.getElementById("lang").value;
+
+    const res = await fetch(`/search?q=${encodeURIComponent(q)}&lang=${lang}`);
+    const data = await res.json();
+
+    const container = document.getElementById("results");
+    container.innerHTML = "";
+
+    if (data.results.length === 0) {
+        container.innerHTML = `
+            <div class="text-gray-500 text-center mt-10">
+                Aucun résultat trouvé.
+            </div>`;
+        return;
+    }
+
+    data.results.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "bg-white shadow-md rounded-xl p-6 mb-6 border border-gray-200";
+
+        card.innerHTML = `
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-sm text-gray-400">Livre : ${item.book_title}</span>
+                <span class="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
+                    ${item.language.toUpperCase()}
+                </span>
+            </div>
+
+            <div class="text-lg font-semibold text-gray-900 mb-4">
+                ${item.text}
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-400 mb-1">Texte source</div>
+                    <div class="font-medium text-gray-800">${item.text}</div>
+                </div>
+
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-xs text-gray-400 mb-1">Alignement</div>
+                    <div class="font-medium text-gray-800">
+                        ${item.alignment_text || "<span class='text-gray-400'>Aucun alignement trouvé</span>"}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+    </script>
+</head>
+
+<body class="font-sans">
+
+    <div class="max-w-4xl mx-auto mt-12">
+
+        <h1 class="text-4xl font-bold text-gray-900 mb-8 text-center">
+            Dictionnaire bilingue
+        </h1>
+
+        <div class="flex gap-4 mb-10">
+            <input id="query" type="text"
+                class="flex-1 px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400"
+                placeholder="Rechercher un mot ou une expression…">
+
+            <select id="lang"
+                class="px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400">
+                <option value="en">EN → FR</option>
+                <option value="fr">FR → EN</option>
+            </select>
+
+            <button onclick="doSearch()"
+                class="px-6 py-3 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition">
+                Rechercher
+            </button>
+        </div>
+
+        <div id="results"></div>
+
+    </div>
+
+</body>
+</html>
