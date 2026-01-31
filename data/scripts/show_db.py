@@ -1,5 +1,6 @@
-# show_tables.py
 import sqlite3
-conn = sqlite3.connect("backend/linguee_like.db")
-print([r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()])
+
+conn = sqlite3.connect(r"C:\Users\AZEBAZE Nadine\Documents\linguee_like\backend\linguee_like.db")
+rows = conn.execute("SELECT id FROM segments LIMIT 5").fetchall()
+print(rows)
 conn.close()

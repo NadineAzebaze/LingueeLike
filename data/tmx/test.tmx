@@ -7,6 +7,10 @@
     adminlang="en"
     srclang="en"
     datatype="PlainText"
+    o-book-title="TMX Test Book"
+    o-book-author="System"
+    o-book-year="2024"
+    o-book-language="en"
   />
   <body>
 

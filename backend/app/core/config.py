@@ -2,7 +2,7 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite:///./linguee_like.db"  # pour commencer en local
+    DATABASE_URL: str | None = None
 
     class Config:
         env_file = ".env"
