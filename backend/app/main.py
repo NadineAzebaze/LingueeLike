@@ -1,19 +1,15 @@
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
 
-# Dossier des templates HTML
-templates = Jinja2Templates(directory="app/templates")
+# Absolute path to templates directory
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
-# Page d'accueil API
+# Page d'accueil → search.html
 @app.get("/")
-def root():
-    return {"message": "API running"}
-
-# --- Interface utilisateur ---
-@app.get("/ui/search")
-def ui_search(request: Request):
+def root(request: Request):
     return templates.TemplateResponse("search.html", {"request": request})
 
 # --- Routes API existantes ---

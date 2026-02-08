@@ -1,7 +1,6 @@
 # backend/app/db/models.py
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
-from sqlalchemy import inspect
 
 from .database import Base, engine
 
@@ -60,3 +59,36 @@ class Alignment(Base):
 
     segment_fr = relationship("Segment", foreign_keys=[segment_fr_id], back_populates="alignments_fr")
     segment_en = relationship("Segment", foreign_keys=[segment_en_id], back_populates="alignments_en")
+
+
+class WordTranslation(Base):
+    __tablename__ = "word_translations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_stem = Column(String, nullable=False)
+    source_lang = Column(String(2), nullable=False)
+    target_stem = Column(String, nullable=False)
+    target_lang = Column(String(2), nullable=False)
+    score = Column(Float, nullable=False)
+    co_occurrence_count = Column(Integer, default=0)
+    source_count = Column(Integer, default=0)
+    target_count = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index("ix_word_trans_lookup", "source_stem", "source_lang"),
+        UniqueConstraint("source_stem", "source_lang", "target_stem", "target_lang", name="uq_word_pair"),
+    )
+
+
+class StemForm(Base):
+    __tablename__ = "stem_forms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stem = Column(String, nullable=False)
+    surface_form = Column(String, nullable=False)
+    language = Column(String(2), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("stem", "surface_form", "language", name="uq_stem_surface"),
+        Index("ix_stem_lookup", "stem", "language"),
+    )

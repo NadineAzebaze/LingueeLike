@@ -1,12 +1,13 @@
 # backend/app/api/dictionary.py
-from typing import List
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, or_, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.db.models import Segment, Book
+from app.nlp.highlighter import lookup_translations, find_highlights_in_text
 
 router = APIRouter()
+
 
 def get_db():
     db = SessionLocal()
@@ -14,6 +15,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 @router.get("/search")
 def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: int = 20, db: Session = Depends(get_db)):
@@ -45,7 +47,7 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
         for r in rows:
             segment = db.get(Segment, r["segment_id"])
 
-            # Trouver l’alignement opposé
+            # Trouver l'alignement opposé
             if lang == "en":
                 alignment = segment.alignments_en[0].segment_fr if segment.alignments_en else None
             else:
@@ -61,5 +63,13 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
                 "alignment_language": alignment.language if alignment else None,
                 "alignment_id": alignment.id if alignment else None,
             })
+
+        # Look up word translations from corpus-based index
+        translation_map = lookup_translations(q_clean, lang, db)
+
+        for item in results:
+            item["alignment_highlights"] = find_highlights_in_text(
+                item["alignment_text"] or "", translation_map
+            )
 
         return {"query": q_clean, "lang": lang, "count": len(results), "results": results}

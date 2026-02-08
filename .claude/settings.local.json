@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/c/Users/AZEBAZE\\\\ Nadine/AppData/Local/Programs/Python/Python311/python:*)"
+    ]
+  }
+}

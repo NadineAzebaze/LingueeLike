@@ -2,101 +2,218 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Dictionnaire bilingue</title>
-
-    <!-- TailwindCSS CDN -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LingueeLike - Dictionnaire bilingue</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <style>
-        body {
-            background: #f7f7f9;
-        }
+        body { background: #f0f2f5; }
+        .lang-badge-en { background: #dbeafe; color: #1d4ed8; }
+        .lang-badge-fr { background: #fce7f3; color: #be185d; }
+        .source-bar { border-left: 4px solid #3b82f6; }
+        .target-bar { border-left: 4px solid #10b981; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-
-    <script>
-        async function doSearch() {
-    const q = document.getElementById("query").value;
-    const lang = document.getElementById("lang").value;
-
-    const res = await fetch(`/search?q=${encodeURIComponent(q)}&lang=${lang}`);
-    const data = await res.json();
-
-    const container = document.getElementById("results");
-    container.innerHTML = "";
-
-    if (data.results.length === 0) {
-        container.innerHTML = `
-            <div class="text-gray-500 text-center mt-10">
-                Aucun résultat trouvé.
-            </div>`;
-        return;
-    }
-
-    data.results.forEach(item => {
-        const card = document.createElement("div");
-        card.className = "bg-white shadow-md rounded-xl p-6 mb-6 border border-gray-200";
-
-        card.innerHTML = `
-            <div class="flex justify-between items-center mb-3">
-                <span class="text-sm text-gray-400">Livre : ${item.book_title}</span>
-                <span class="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
-                    ${item.language.toUpperCase()}
-                </span>
-            </div>
-
-            <div class="text-lg font-semibold text-gray-900 mb-4">
-                ${item.text}
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <div class="text-xs text-gray-400 mb-1">Texte source</div>
-                    <div class="font-medium text-gray-800">${item.text}</div>
-                </div>
-
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <div class="text-xs text-gray-400 mb-1">Alignement</div>
-                    <div class="font-medium text-gray-800">
-                        ${item.alignment_text || "<span class='text-gray-400'>Aucun alignement trouvé</span>"}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        container.appendChild(card);
-    });
-}
-    </script>
 </head>
+<body class="font-sans min-h-screen">
 
-<body class="font-sans">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900">
+                Linguee<span class="text-blue-600">Like</span>
+            </h1>
+            <span class="text-sm text-gray-400">Dictionnaire bilingue EN / FR</span>
+        </div>
+    </header>
 
-    <div class="max-w-4xl mx-auto mt-12">
-
-        <h1 class="text-4xl font-bold text-gray-900 mb-8 text-center">
-            Dictionnaire bilingue
-        </h1>
-
-        <div class="flex gap-4 mb-10">
-            <input id="query" type="text"
-                class="flex-1 px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400"
-                placeholder="Rechercher un mot ou une expression…">
+    <!-- Search section -->
+    <div class="max-w-5xl mx-auto px-6 mt-10">
+        <form id="search-form" class="bg-white rounded-2xl shadow-md p-6 flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+                <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input id="query" type="text" autocomplete="off"
+                    class="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
+                    placeholder="Rechercher un mot ou une expression...">
+            </div>
 
             <select id="lang"
-                class="px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400">
-                <option value="en">EN → FR</option>
-                <option value="fr">FR → EN</option>
+                class="px-4 py-3 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium cursor-pointer">
+                <option value="en">English &rarr; Francais</option>
+                <option value="fr">Francais &rarr; English</option>
             </select>
 
-            <button onclick="doSearch()"
-                class="px-6 py-3 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition">
+            <button type="submit"
+                class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow hover:bg-blue-700 active:bg-blue-800 transition-colors">
                 Rechercher
             </button>
+        </form>
+
+        <!-- Status bar -->
+        <div id="status" class="mt-4 text-sm text-gray-500 px-2 hidden"></div>
+
+        <!-- Welcome guide (shown before first search) -->
+        <div id="welcome" class="mt-10 text-center">
+            <svg class="mx-auto w-20 h-20 text-blue-200 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            <h2 class="text-xl font-semibold text-gray-700 mb-3">Bienvenue sur LingueeLike</h2>
+            <p class="text-gray-500 max-w-lg mx-auto mb-6">
+                Recherchez un mot ou une expression dans la barre ci-dessus pour trouver
+                des traductions en contexte issues de livres bilingues.
+            </p>
+            <div class="flex flex-wrap justify-center gap-3 text-sm">
+                <span class="bg-white border border-gray-200 rounded-full px-4 py-2 text-gray-500">
+                    1. Tapez un mot ou une phrase
+                </span>
+                <span class="bg-white border border-gray-200 rounded-full px-4 py-2 text-gray-500">
+                    2. Choisissez la direction de traduction
+                </span>
+                <span class="bg-white border border-gray-200 rounded-full px-4 py-2 text-gray-500">
+                    3. Appuyez sur Entree ou cliquez Rechercher
+                </span>
+            </div>
         </div>
 
-        <div id="results"></div>
-
+        <!-- Results -->
+        <div id="results" class="mt-6 pb-16"></div>
     </div>
 
+    <script>
+        const form = document.getElementById("search-form");
+        const queryInput = document.getElementById("query");
+        const langSelect = document.getElementById("lang");
+        const resultsContainer = document.getElementById("results");
+        const statusEl = document.getElementById("status");
+
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            doSearch();
+        });
+
+        async function doSearch() {
+            const q = queryInput.value.trim();
+            if (!q) return;
+
+            const lang = langSelect.value;
+            const sourceLang = lang.toUpperCase();
+            const targetLang = lang === "en" ? "FR" : "EN";
+
+            // Hide welcome, show loading
+            document.getElementById("welcome").classList.add("hidden");
+            resultsContainer.innerHTML = `
+                <div class="flex justify-center items-center py-16">
+                    <div class="spinner"></div>
+                    <span class="ml-3 text-gray-400">Recherche en cours...</span>
+                </div>`;
+            statusEl.classList.add("hidden");
+
+            try {
+                const res = await fetch(`/search?q=${encodeURIComponent(q)}&lang=${lang}`);
+                const data = await res.json();
+
+                resultsContainer.innerHTML = "";
+
+                // Status
+                statusEl.textContent = `${data.count} resultat${data.count !== 1 ? "s" : ""} pour "${data.query}"`;
+                statusEl.classList.remove("hidden");
+
+                if (data.results.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div class="text-center py-16">
+                            <svg class="mx-auto w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <p class="text-gray-400 text-lg">Aucun resultat pour "<strong>${escapeHtml(q)}</strong>"</p>
+                            <p class="text-gray-400 text-sm mt-1">Essayez un autre mot ou changez la langue.</p>
+                        </div>`;
+                    return;
+                }
+
+                data.results.forEach((item, idx) => {
+                    const card = document.createElement("div");
+                    card.className = "bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-hidden fade-in";
+                    card.style.animationDelay = `${idx * 0.05}s`;
+
+                    const highlightedText = highlightMatch(item.text, q);
+                    const highlights = item.alignment_highlights || [];
+                    const alignmentHtml = item.alignment_text
+                        ? `<p class="text-gray-800 leading-relaxed">${highlightWords(item.alignment_text, highlights)}</p>`
+                        : `<p class="text-gray-400 italic">Aucun alignement disponible</p>`;
+
+                    card.innerHTML = `
+                        <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                            <!-- Source -->
+                            <div class="p-5">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="lang-badge-${lang} text-xs font-bold px-2.5 py-1 rounded-full">${sourceLang}</span>
+                                    <span class="text-xs text-gray-400">${escapeHtml(item.book_title)}</span>
+                                </div>
+                                <div class="source-bar pl-4">
+                                    <p class="text-gray-900 leading-relaxed">${highlightedText}</p>
+                                </div>
+                            </div>
+                            <!-- Translation -->
+                            <div class="p-5 bg-gray-50/50">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="lang-badge-${lang === 'en' ? 'fr' : 'en'} text-xs font-bold px-2.5 py-1 rounded-full">${targetLang}</span>
+                                    <span class="text-xs text-gray-400">Traduction</span>
+                                </div>
+                                <div class="target-bar pl-4">
+                                    ${alignmentHtml}
+                                </div>
+                            </div>
+                        </div>`;
+
+                    resultsContainer.appendChild(card);
+                });
+            } catch (err) {
+                resultsContainer.innerHTML = `
+                    <div class="text-center py-16 text-red-500">
+                        Une erreur est survenue. Veuillez reessayer.
+                    </div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function highlightMatch(text, query) {
+            const escaped = escapeHtml(text);
+            const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
+            if (words.length === 0) return escaped;
+
+            const allPatterns = [query.trim(), ...words];
+            const unique = [...new Set(allPatterns)];
+
+            let result = escaped;
+            for (const word of unique) {
+                const wordEscaped = escapeHtml(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${wordEscaped})`, "gi");
+                result = result.replace(regex,
+                    '<mark style="background:#fde68a;padding:1px 3px;border-radius:3px;font-weight:600;">$1</mark>');
+            }
+            return result;
+        }
+
+        function highlightWords(text, words) {
+            if (!words || words.length === 0) return escapeHtml(text);
+            let result = escapeHtml(text);
+            for (const word of words) {
+                const wordEscaped = escapeHtml(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${wordEscaped})`, "gi");
+                result = result.replace(regex,
+                    '<mark style="background:#a7f3d0;padding:1px 3px;border-radius:3px;font-weight:600;">$1</mark>');
+            }
+            return result;
+        }
+    </script>
 </body>
 </html>
