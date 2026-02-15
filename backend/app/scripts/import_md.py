@@ -62,6 +62,7 @@ def import_aligned_csv(
     db.refresh(book_fr)
 
     # Create segments and alignments
+    new_segments = []
     for i, (en_text, fr_text) in enumerate(pairs, start=1):
         seg_en = Segment(
             book_id=book_en.id,
@@ -78,6 +79,7 @@ def import_aligned_csv(
         db.add(seg_en)
         db.add(seg_fr)
         db.flush()  # get IDs before creating alignment
+        new_segments.extend([seg_en, seg_fr])
 
         alignment = Alignment(
             segment_en_id=seg_en.id,
@@ -92,5 +94,12 @@ def import_aligned_csv(
     from app.nlp.indexer import build_word_index
     index_count = build_word_index(db)
     print(f"Word translation index rebuilt: {index_count} entries")
+
+    # Index into OpenSearch (non-blocking — import works without it)
+    try:
+        from app.search.sync import index_segments
+        index_segments(new_segments)
+    except Exception as e:
+        print(f"OpenSearch indexing skipped: {e}")
 
     return book_en, book_fr, len(pairs)
