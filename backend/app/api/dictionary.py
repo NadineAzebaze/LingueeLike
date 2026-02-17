@@ -17,41 +17,131 @@ def get_db():
         db.close()
 
 
-def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[int] | None:
-    """Query OpenSearch for matching segment IDs. Returns None on failure (triggers SQLite fallback)."""
+def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None:
+    """
+    Hybrid OpenSearch search: exact phrase match (high boost) + BM25 multi_match (broad recall).
+    Results are deduplicated and sorted by score descending.
+    """
     try:
         from app.search.client import get_opensearch_client
         from app.core.config import settings
 
         client = get_opensearch_client()
-        text_field = f"text.{lang}"
 
+        book_id = 1 if lang == "en" else 2
+
+        # Hybrid query: phrase match for precision + BM25 for recall
         body = {
-            "size": limit,
             "query": {
                 "bool": {
                     "should": [
-                        {"match_phrase": {text_field: {"query": q_clean, "boost": 2}}},
-                        {"match_phrase": {"text": {"query": q_clean}}},
+                        {
+                            "match_phrase": {
+                                "text": {
+                                    "query": q_clean,
+                                    "boost": 4,
+                                    "slop": 1
+                                }
+                            }
+                        },
+                        {
+                            "multi_match": {
+                                "query": q_clean,
+                                "fields": ["text^3", "text_normalized"],
+                                "type": "best_fields",
+                                "operator": "OR",
+                                "fuzziness": "AUTO",
+                                "minimum_should_match": "60%"
+                            }
+                        }
                     ],
                     "minimum_should_match": 1,
-                    "filter": {
-                        "term": {"language": lang}
-                    },
+                    "filter": [
+                        {"term": {"lang": lang}},
+                        {"term": {"book_id": book_id}}
+                    ]
                 }
             },
-            "_source": ["segment_id"],
+            "size": limit,
+            "sort": [
+                {"_score": "desc"},
+                {"position": "asc"}
+            ]
         }
 
         response = client.search(index=settings.OPENSEARCH_INDEX, body=body)
-        return [hit["_source"]["segment_id"] for hit in response["hits"]["hits"]]
+
+        results = []
+        for hit in response["hits"]["hits"]:
+            source = hit["_source"]
+            aligned_id = source.get("aligned_id")
+
+            alignment = None
+            if aligned_id:
+                aligned_lang = "fr" if lang == "en" else "en"
+                aligned_doc_id = f"{aligned_lang}-{aligned_id}"
+
+                try:
+                    aligned_response = client.get(
+                        index=settings.OPENSEARCH_INDEX,
+                        id=aligned_doc_id
+                    )
+                    alignment = aligned_response["_source"]
+                except:
+                    alignment = None
+
+            results.append({
+                "segment": source,
+                "alignment": alignment
+            })
+
+        return results
 
     except Exception:
         return None
 
 
+def _lookup_translation_hints(query: str, lang: str, db: Session) -> list[str]:
+    """
+    Look up known translations from the WordTranslation co-occurrence index.
+    Returns surface forms of the top translation candidates for each query word,
+    excluding stop words which are unreliable translation hints.
+    """
+    from app.db.models import WordTranslation, StemForm
+    from app.nlp.stemmer import stem, clean_token as _clean, is_stop_word
+
+    target_lang = "fr" if lang == "en" else "en"
+    hints = []
+
+    for word in query.strip().split():
+        w_clean = _clean(word)
+        if not w_clean or len(w_clean) < 2:
+            continue
+        w_stem = stem(w_clean, lang)
+
+        translations = (
+            db.query(WordTranslation)
+            .filter_by(source_stem=w_stem, source_lang=lang)
+            .order_by(WordTranslation.score.desc())
+            .limit(5)
+            .all()
+        )
+
+        for trans in translations:
+            if is_stop_word(trans.target_stem, target_lang):
+                continue
+            surfaces = (
+                db.query(StemForm)
+                .filter_by(stem=trans.target_stem, language=target_lang)
+                .all()
+            )
+            hints.extend([s.surface_form for s in surfaces])
+
+    return hints
+
+
 def _build_result(segment, book, lang):
-    """Build a result dict from a Segment and its alignment."""
+    """SQLite fallback alignment."""
     if lang == "en":
         alignment = segment.alignments_en[0].segment_fr if segment.alignments_en else None
     else:
@@ -74,16 +164,24 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
     q_clean = q.strip()
     results = []
 
-    # Try OpenSearch first
-    segment_ids = _search_opensearch(q_clean, lang, limit)
+    opensearch_results = _search_opensearch(q_clean, lang, limit)
 
-    if segment_ids is not None:
-        for sid in segment_ids:
-            segment = db.get(Segment, sid)
-            if not segment:
-                continue
-            book = db.get(Book, segment.book_id)
-            results.append(_build_result(segment, book, lang))
+    if opensearch_results is not None:
+        for item in opensearch_results:
+            segment = item["segment"]
+            alignment = item["alignment"]
+
+            result = {
+                "segment_id": segment["segment_id"],
+                "book_id": segment["book_id"],
+                "book_title": "",
+                "language": segment["lang"],
+                "text": segment["text"],
+                "alignment_text": alignment["text"] if alignment else None,
+                "alignment_language": alignment["lang"] if alignment else None,
+                "alignment_id": alignment["segment_id"] if alignment else None,
+            }
+            results.append(result)
     else:
         # SQLite fallback
         pattern = f"%{q_clean}%"
@@ -101,13 +199,15 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
             book = db.get(Book, segment.book_id)
             results.append(_build_result(segment, book, lang))
 
-    # Positional alignment highlighting
+    # Highlighting (with DB translation hints for accuracy)
+    translation_hints = _lookup_translation_hints(q_clean, lang, db)
     for item in results:
         item["alignment_highlights"] = find_highlights_in_text(
             query=q_clean,
             source_text=item["text"],
             target_text=item["alignment_text"] or "",
             source_lang=lang,
+            translation_hints=translation_hints,
         )
 
     return {"query": q_clean, "lang": lang, "count": len(results), "results": results}

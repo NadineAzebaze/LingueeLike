@@ -7,50 +7,33 @@ INDEX_NAME = settings.OPENSEARCH_INDEX
 
 INDEX_MAPPING = {
     "settings": {
-        "number_of_shards": 1,
-        "number_of_replicas": 0,
         "analysis": {
-            "analyzer": {
-                "english_custom": {
+            "normalizer": {
+                "lowercase_normalizer": {
                     "type": "custom",
-                    "tokenizer": "standard",
-                    "filter": ["lowercase", "english_stop", "english_stemmer"],
-                },
-                "french_custom": {
-                    "type": "custom",
-                    "tokenizer": "standard",
-                    "filter": ["lowercase", "french_elision", "french_stop", "french_stemmer"],
-                },
-            },
-            "filter": {
-                "english_stop": {"type": "stop", "stopwords": "_english_"},
-                "english_stemmer": {"type": "stemmer", "language": "english"},
-                "french_stop": {"type": "stop", "stopwords": "_french_"},
-                "french_stemmer": {"type": "stemmer", "language": "french"},
-                "french_elision": {
-                    "type": "elision",
-                    "articles_case": True,
-                    "articles": ["l", "m", "t", "qu", "n", "s", "j", "d", "c"],
-                },
-            },
-        },
+                    "filter": ["lowercase"]
+                }
+            }
+        }
     },
     "mappings": {
         "properties": {
             "segment_id": {"type": "integer"},
             "book_id": {"type": "integer"},
             "position": {"type": "integer"},
-            "language": {"type": "keyword"},
+            "lang": {"type": "keyword"},
             "text": {
                 "type": "text",
                 "analyzer": "standard",
-                "fields": {
-                    "en": {"type": "text", "analyzer": "english_custom"},
-                    "fr": {"type": "text", "analyzer": "french_custom"},
-                },
+                "search_analyzer": "standard"
             },
+            "text_normalized": {
+                "type": "keyword",
+                "normalizer": "lowercase_normalizer"
+            },
+            "aligned_id": {"type": "integer"}
         }
-    },
+    }
 }
 
 

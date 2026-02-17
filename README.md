@@ -14,7 +14,7 @@ L’objectif du MVP est simple :
 Ce projet répond à plusieurs besoins concrets :
 
 ### ✔ Importer des traductions existantes  
-À partir d’un fichier TMX (format standard utilisé par les traducteurs), le système extrait automatiquement les phrases anglaises et françaises.
+À partir d’un fichier csv (format standard utilisé par les traducteurs), le système extrait automatiquement les phrases anglaises et françaises.
 
 ### ✔ Aligner les phrases  
 Chaque phrase anglaise est reliée à sa traduction française.  
