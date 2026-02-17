@@ -166,15 +166,24 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
 
     opensearch_results = _search_opensearch(q_clean, lang, limit)
 
+    # Cache book titles to avoid repeated DB lookups
+    book_title_cache: dict[int, str] = {}
+
     if opensearch_results is not None:
         for item in opensearch_results:
             segment = item["segment"]
             alignment = item["alignment"]
 
+            book_id = segment["book_id"]
+            if book_id not in book_title_cache:
+                book = db.get(Book, book_id)
+                book_title_cache[book_id] = book.title if book else ""
+            book_title = book_title_cache[book_id]
+
             result = {
                 "segment_id": segment["segment_id"],
-                "book_id": segment["book_id"],
-                "book_title": "",
+                "book_id": book_id,
+                "book_title": book_title,
                 "language": segment["lang"],
                 "text": segment["text"],
                 "alignment_text": alignment["text"] if alignment else None,
