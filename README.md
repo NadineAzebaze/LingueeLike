@@ -55,8 +55,6 @@ linguee_like/
 │   │   │   └── index.py              # Mapping de l'index + helpers création/suppression
 │   │   └── templates/
 │   │       └── search.html           # Interface de recherche (Tailwind CSS)
-│   ├── scripts/
-│   │   └── align_books.py            # Extrait les paires alignées des livres markdown
 │   ├── index_csv_opensearch.py       # Indexation du CSV dans OpenSearch
 │   └── import_md_runner.py           # Import du CSV dans SQLite
 │
@@ -173,12 +171,6 @@ Ouvrez `http://localhost:8000` dans votre navigateur.
 1. Ajoutez le CSV aligné dans `data/books/` (colonnes : `en`, `fr`)
 2. Modifiez `import_md_runner.py` avec les métadonnées du nouveau livre et exécutez-le
 3. Relancez `index_csv_opensearch.py` pour indexer dans OpenSearch
-
-Pour générer un CSV aligné à partir d'une paire de fichiers markdown, exécutez :
-
-```bash
-python scripts/align_books.py
-```
 
 ---
 
