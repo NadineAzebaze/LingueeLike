@@ -1,6 +1,6 @@
 # backend/app/nlp/highlighter.py
 
-from app.nlp.stemmer import stem, clean_token, is_stop_word, strip_accents
+from app.nlp.stemmer import stem, clean_token, is_stop_word, strip_accents, other_lang
 
 
 # Common adjectives that often have word order differences between EN and FR
@@ -52,7 +52,7 @@ def find_highlights_in_text(query, source_text, target_text, source_lang, transl
     if not target_text or not source_text:
         return []
 
-    target_lang = "fr" if source_lang == "en" else "en"
+    target_lang = other_lang(source_lang)
 
     # Extract content words from query (don't filter stop words - they can be valid search terms)
     query_words = []

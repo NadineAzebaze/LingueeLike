@@ -134,6 +134,11 @@ def stem(word: str, lang: str) -> str:
     return stem_fr(cleaned)
 
 
+def other_lang(lang: str) -> str:
+    """Return the opposite language code: 'en' ↔ 'fr'."""
+    return "fr" if lang == "en" else "en"
+
+
 def tokenize_and_stem(text: str, lang: str) -> list:
     """Tokenize, filter stop words, stem. Returns list of (stem, surface_form)."""
     result = []
