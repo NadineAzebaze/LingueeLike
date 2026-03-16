@@ -11,20 +11,21 @@ Le système est construit autour de trois couches :
 
 **1. Couche données (SQLite + OpenSearch)**
 Les paires de phrases EN/FR alignées sont stockées dans SQLite et indexées dans OpenSearch.
-Chaque phrase est reliée à sa traduction via un identifiant d'alignement bidirectionnel.
+Chaque document OpenSearch représente une **paire bilingue complète** : la phrase source ET sa traduction sont dans le même document, ce qui évite toute requête secondaire lors de la recherche.
 
 **2. Couche recherche (requête OpenSearch hybride)**
 Les requêtes combinent deux stratégies :
 
-- `match_phrase` (boost ×4) — correspondance exacte ou quasi-exacte pour une haute précision
-- `multi_match best_fields` (fuzziness AUTO) — correspondance de mots approximative pour un large rappel
+- `match_phrase` (boost ×4, slop=1) — correspondance exacte ou quasi-exacte pour une haute précision
+- `multi_match best_fields` (fuzziness AUTO) — correspondance approximative pour un large rappel
 
-Le filtre restreint les résultats à la langue et au livre corrects, puis trie par score de pertinence.
+Le champ ciblé (`text_en` ou `text_fr`) détermine la langue de recherche — plus besoin de filtre `lang` explicite.
+La traduction correspondante est retournée directement depuis le même document.
 
 **3. Couche mise en évidence (pipeline NLP)**
-Une fois la phrase source et sa traduction récupérées, le système met en évidence le ou les mots correspondants dans la traduction grâce à :
+Une fois la paire récupérée, le système met en évidence le ou les mots correspondants dans la traduction grâce à :
 
-- Un index de traductions de mots basé sur la co-occurrence (coefficient de Dice, construit à l'import)
+- Un index de traductions basé sur la co-occurrence (coefficient de Dice, construit à l'import dans SQLite)
 - Un alignement positionnel en secours pour les mots absents du dictionnaire
 - Un filtrage des mots vides et une détection des mots composés (ex. `soul` → `soul-winning`)
 
@@ -55,6 +56,12 @@ linguee_like/
 │   │   │   └── index.py              # Mapping de l'index + helpers création/suppression
 │   │   └── templates/
 │   │       └── search.html           # Interface de recherche (Tailwind CSS)
+│   ├── tests/
+│   │   ├── test_stemmer.py           # Tests NLP (racinisation, mots vides)
+│   │   ├── test_highlighter.py       # Tests mise en évidence
+│   │   ├── test_search_opensearch.py # Tests requête OpenSearch (client mocké)
+│   │   ├── test_search_endpoint.py   # Tests endpoint FastAPI (OpenSearch + DB mockés)
+│   │   └── test_index_mapping.py     # Tests structure du mapping
 │   ├── index_csv_opensearch.py       # Indexation du CSV dans OpenSearch
 │   └── import_md_runner.py           # Import du CSV dans SQLite
 │
@@ -70,6 +77,8 @@ linguee_like/
 
 ## Modèle de données
 
+### SQLite
+
 | Table               | Description                                                            |
 | ------------------- | ---------------------------------------------------------------------- |
 | `books`             | Un enregistrement par version linguistique du livre (EN + FR)          |
@@ -78,21 +87,24 @@ linguee_like/
 | `word_translations` | Scores de traduction de mots par co-occurrence (coefficient de Dice)   |
 | `stem_forms`        | Associe les racines à leurs formes de surface pour la mise en évidence |
 
-OpenSearch reflète les segments avec la structure de document suivante :
+### OpenSearch — document paire bilingue
+
+Chaque document représente une paire alignée complète (1 document = 1 phrase EN + 1 phrase FR) :
 
 ```json
 {
-  "segment_id": 1,
+  "pair_id": 1,
   "book_id": 1,
   "position": 1,
-  "lang": "en",
-  "text": "The Lord Jesus came to seek and to save the lost.",
-  "text_normalized": "the lord jesus came to seek and to save the lost.",
-  "aligned_id": 2
+  "segment_id_en": 1,
+  "segment_id_fr": 2,
+  "text_en": "The Lord Jesus came to seek and to save the lost.",
+  "text_fr": "Le Seigneur Jésus est venu chercher et sauver les perdus."
 }
 ```
 
-`aligned_id` pointe vers l'identifiant du document de traduction dans le même index (`fr-2` dans l'exemple ci-dessus).
+`text_en` est analysé avec l'analyzer `english` (stemming, stopwords EN), `text_fr` avec l'analyzer `french`.
+Chaque champ dispose d'un sous-champ `.normalized` (keyword lowercase+asciifolding) pour la recherche exacte.
 
 ---
 
@@ -144,17 +156,11 @@ Cela crée les livres, segments, alignements et l'index de traduction de mots.
 
 ### 6. Indexer dans OpenSearch
 
-Créer d'abord l'index :
-
-```bash
-python -c "from app.search.index import create_index; create_index()"
-```
-
-Puis indexer le CSV :
-
 ```bash
 python index_csv_opensearch.py
 ```
+
+Le script recrée l'index (mapping inclus) et indexe toutes les paires en bulk.
 
 ### 7. Lancer l'API
 
@@ -166,11 +172,23 @@ Ouvrez `http://localhost:8000` dans votre navigateur.
 
 ---
 
+## Tests
+
+```bash
+cd backend
+pip install pytest httpx
+python -m pytest tests/ -v
+```
+
+30 tests couvrant le NLP, la mise en évidence, la requête OpenSearch et l'endpoint FastAPI.
+
+---
+
 ## Ajouter un nouveau livre
 
 1. Ajoutez le CSV aligné dans `data/books/` (colonnes : `en`, `fr`)
 2. Modifiez `import_md_runner.py` avec les métadonnées du nouveau livre et exécutez-le
-3. Relancez `index_csv_opensearch.py` pour indexer dans OpenSearch
+3. Relancez `index_csv_opensearch.py` pour réindexer dans OpenSearch
 
 ---
 

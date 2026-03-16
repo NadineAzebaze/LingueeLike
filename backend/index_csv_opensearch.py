@@ -1,78 +1,75 @@
+"""
+Re-index the aligned CSV as bilingual pair documents.
+
+Each OpenSearch document stores both the English and French sentence of an
+aligned pair so that a single query returns the source sentence AND its
+translation without a secondary lookup.
+
+Usage (from backend/):
+    python index_csv_opensearch.py [path/to/aligned_book.csv]
+"""
+
 import csv
-from opensearchpy import OpenSearch
+import sys
+import os
 
-CSV_PATH = "../data/books/aligned_book.csv"
-INDEX_NAME = "segments"
+# Make app importable when run as a top-level script from backend/
+sys.path.insert(0, os.path.dirname(__file__))
 
-BOOK_ID_EN = 1
-BOOK_ID_FR = 2
+from opensearchpy import helpers
+from app.search.client import get_opensearch_client
+from app.search.index import INDEX_NAME, INDEX_MAPPING
 
-client = OpenSearch(
-    hosts=[{"host": "localhost", "port": 9200}],
-    http_compress=True,
-    use_ssl=False,
-    verify_certs=False,
-    timeout=30,
-)
+CSV_PATH = os.path.join(os.path.dirname(__file__), "../data/books/aligned_book.csv")
+BOOK_ID = 1
 
-def index_csv(csv_path):
-    print("Indexation en cours...")
 
-    total = 0
+def _recreate_index(client):
+    client.indices.delete(index=INDEX_NAME, ignore=404)
+    client.indices.create(index=INDEX_NAME, body=INDEX_MAPPING)
+    print(f"Index '{INDEX_NAME}' recréé.")
 
+
+def _iter_actions(csv_path):
+    """Yield one bulk-action dict per aligned pair."""
     with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
-
         for i, row in enumerate(reader):
             pos = i + 1
-
-            seg_id_en = pos * 2 - 1
-            seg_id_fr = pos * 2
-
-            text_en = row["en"].strip()
-            text_fr = row["fr"].strip()
-
-            # --- EN ---
-            doc_en = {
-                "segment_id": seg_id_en,
-                "book_id": BOOK_ID_EN,
-                "position": pos,
-                "lang": "en",
-                "text": text_en,
-                "text_normalized": text_en.lower(),
-                "aligned_id": seg_id_fr
+            yield {
+                "_index": INDEX_NAME,
+                "_id": f"pair-{pos}",
+                "_source": {
+                    "pair_id":       pos,
+                    "book_id":       BOOK_ID,
+                    "position":      pos,
+                    "segment_id_en": pos * 2 - 1,
+                    "segment_id_fr": pos * 2,
+                    "text_en":       row["en"].strip(),
+                    "text_fr":       row["fr"].strip(),
+                },
             }
 
-            client.index(
-                index=INDEX_NAME,
-                id=f"en-{seg_id_en}",
-                body=doc_en
-            )
 
-            # --- FR ---
-            doc_fr = {
-                "segment_id": seg_id_fr,
-                "book_id": BOOK_ID_FR,
-                "position": pos,
-                "lang": "fr",
-                "text": text_fr,
-                "text_normalized": text_fr.lower(),
-                "aligned_id": seg_id_en
-            }
+def index_csv(csv_path):
+    client = get_opensearch_client()
+    _recreate_index(client)
+    print("Indexation en cours...")
 
-            client.index(
-                index=INDEX_NAME,
-                id=f"fr-{seg_id_fr}",
-                body=doc_fr
-            )
+    success, errors = helpers.bulk(
+        client,
+        _iter_actions(csv_path),
+        chunk_size=200,
+        raise_on_error=False,
+    )
 
-            total += 1
+    print(f"\nIndexation terminée — {success} paires indexées.")
+    if errors:
+        print(f"Erreurs : {len(errors)}")
+        for err in errors[:5]:
+            print(" ", err)
 
-            if total % 100 == 0:
-                print(f"Indexe {total} paires...")
-
-    print(f"\nIndexation terminee.")
-    print(f"Total: {total} paires ({total} EN + {total} FR = {total * 2} documents)")
 
 if __name__ == "__main__":
-    index_csv(CSV_PATH)
+    path = sys.argv[1] if len(sys.argv) > 1 else CSV_PATH
+    index_csv(path)

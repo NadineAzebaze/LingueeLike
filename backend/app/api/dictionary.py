@@ -2,9 +2,13 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.db.database import SessionLocal
-from app.db.models import Segment, Book
+from app.db.models import Segment, Book, WordTranslation, StemForm
 from app.nlp.highlighter import find_highlights_in_text
+from app.nlp.stemmer import stem, clean_token as _clean, is_stop_word, other_lang
+from app.search.client import get_opensearch_client
 
 router = APIRouter()
 
@@ -19,25 +23,27 @@ def get_db():
 
 def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None:
     """
-    Hybrid OpenSearch search: exact phrase match (high boost) + BM25 multi_match (broad recall).
-    Results are deduplicated and sorted by score descending.
+    Hybrid OpenSearch search on bilingual pair documents.
+
+    Each document contains both text_en and text_fr, so the aligned translation
+    is retrieved in a single query — no secondary lookup required.
+
+    Strategy: exact phrase match (high boost, slop=1) for precision
+              + BM25 multi_match with fuzziness for recall.
     """
     try:
-        from app.search.client import get_opensearch_client
-        from app.core.config import settings
-
         client = get_opensearch_client()
 
-        book_id = 1 if lang == "en" else 2
+        tgt_lang = other_lang(lang)
+        src_field = f"text_{lang}"
 
-        # Hybrid query: phrase match for precision + BM25 for recall
         body = {
             "query": {
                 "bool": {
                     "should": [
                         {
                             "match_phrase": {
-                                "text": {
+                                src_field: {
                                     "query": q_clean,
                                     "boost": 4,
                                     "slop": 1
@@ -47,7 +53,7 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
                         {
                             "multi_match": {
                                 "query": q_clean,
-                                "fields": ["text^3", "text_normalized"],
+                                "fields": [f"{src_field}^3", f"{src_field}.normalized"],
                                 "type": "best_fields",
                                 "operator": "OR",
                                 "fuzziness": "AUTO",
@@ -55,11 +61,7 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
                             }
                         }
                     ],
-                    "minimum_should_match": 1,
-                    "filter": [
-                        {"term": {"lang": lang}},
-                        {"term": {"book_id": book_id}}
-                    ]
+                    "minimum_should_match": 1
                 }
             },
             "size": limit,
@@ -73,26 +75,15 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
 
         results = []
         for hit in response["hits"]["hits"]:
-            source = hit["_source"]
-            aligned_id = source.get("aligned_id")
-
-            alignment = None
-            if aligned_id:
-                aligned_lang = "fr" if lang == "en" else "en"
-                aligned_doc_id = f"{aligned_lang}-{aligned_id}"
-
-                try:
-                    aligned_response = client.get(
-                        index=settings.OPENSEARCH_INDEX,
-                        id=aligned_doc_id
-                    )
-                    alignment = aligned_response["_source"]
-                except:
-                    alignment = None
-
+            src = hit["_source"]
             results.append({
-                "segment": source,
-                "alignment": alignment
+                "segment_id":     src.get(f"segment_id_{lang}"),
+                "alignment_id":   src.get(f"segment_id_{tgt_lang}"),
+                "book_id":        src.get("book_id"),
+                "text":           src.get(src_field, ""),
+                "alignment_text": src.get(f"text_{tgt_lang}", ""),
+                "lang":           lang,
+                "alignment_lang": tgt_lang,
             })
 
         return results
@@ -107,10 +98,7 @@ def _lookup_translation_hints(query: str, lang: str, db: Session) -> list[str]:
     Returns surface forms of the top translation candidates for each query word,
     excluding stop words which are unreliable translation hints.
     """
-    from app.db.models import WordTranslation, StemForm
-    from app.nlp.stemmer import stem, clean_token as _clean, is_stop_word
-
-    target_lang = "fr" if lang == "en" else "en"
+    tgt_lang = other_lang(lang)
     hints = []
 
     for word in query.strip().split():
@@ -128,11 +116,11 @@ def _lookup_translation_hints(query: str, lang: str, db: Session) -> list[str]:
         )
 
         for trans in translations:
-            if is_stop_word(trans.target_stem, target_lang):
+            if is_stop_word(trans.target_stem, tgt_lang):
                 continue
             surfaces = (
                 db.query(StemForm)
-                .filter_by(stem=trans.target_stem, language=target_lang)
+                .filter_by(stem=trans.target_stem, language=tgt_lang)
                 .all()
             )
             hints.extend([s.surface_form for s in surfaces])
@@ -171,26 +159,21 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
 
     if opensearch_results is not None:
         for item in opensearch_results:
-            segment = item["segment"]
-            alignment = item["alignment"]
-
-            book_id = segment["book_id"]
+            book_id = item["book_id"]
             if book_id not in book_title_cache:
                 book = db.get(Book, book_id)
                 book_title_cache[book_id] = book.title if book else ""
-            book_title = book_title_cache[book_id]
 
-            result = {
-                "segment_id": segment["segment_id"],
-                "book_id": book_id,
-                "book_title": book_title,
-                "language": segment["lang"],
-                "text": segment["text"],
-                "alignment_text": alignment["text"] if alignment else None,
-                "alignment_language": alignment["lang"] if alignment else None,
-                "alignment_id": alignment["segment_id"] if alignment else None,
-            }
-            results.append(result)
+            results.append({
+                "segment_id":         item["segment_id"],
+                "book_id":            book_id,
+                "book_title":         book_title_cache[book_id],
+                "language":           item["lang"],
+                "text":               item["text"],
+                "alignment_text":     item["alignment_text"] or None,
+                "alignment_language": item["alignment_lang"],
+                "alignment_id":       item["alignment_id"],
+            })
     else:
         # SQLite fallback
         pattern = f"%{q_clean}%"
@@ -208,15 +191,16 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
             book = db.get(Book, segment.book_id)
             results.append(_build_result(segment, book, lang))
 
-    # Highlighting (with DB translation hints for accuracy)
-    translation_hints = _lookup_translation_hints(q_clean, lang, db)
-    for item in results:
-        item["alignment_highlights"] = find_highlights_in_text(
-            query=q_clean,
-            source_text=item["text"],
-            target_text=item["alignment_text"] or "",
-            source_lang=lang,
-            translation_hints=translation_hints,
-        )
+    # Skip DB hint lookup when there is nothing to highlight
+    if results:
+        translation_hints = _lookup_translation_hints(q_clean, lang, db)
+        for item in results:
+            item["alignment_highlights"] = find_highlights_in_text(
+                query=q_clean,
+                source_text=item["text"],
+                target_text=item["alignment_text"] or "",
+                source_lang=lang,
+                translation_hints=translation_hints,
+            )
 
     return {"query": q_clean, "lang": lang, "count": len(results), "results": results}
