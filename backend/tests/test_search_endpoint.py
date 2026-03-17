@@ -32,14 +32,15 @@ def client():
 
 def _os_pair_result():
     return [{
-        "segment_id":     1,
-        "alignment_id":   2,
-        "book_id":        1,
-        "book_title":     "Thirty-six reasons for winning the lost",
-        "text":           "The gospel must be preached.",
-        "alignment_text": "L'évangile doit être prêché.",
-        "lang":           "en",
-        "alignment_lang": "fr",
+        "segment_id":       1,
+        "alignment_id":     2,
+        "book_id":          1,
+        "book_title":       "Thirty-six reasons for winning the lost",
+        "text":             "The gospel must be preached.",
+        "text_highlighted": "The <mark>gospel</mark> must be preached.",
+        "alignment_text":   "L'évangile doit être prêché.",
+        "lang":             "en",
+        "alignment_lang":   "fr",
     }]
 
 
@@ -79,14 +80,15 @@ def test_search_returns_empty_when_opensearch_fails(client):
 
 def test_search_fr_lang(client):
     fr_result = [{
-        "segment_id":     2,
-        "alignment_id":   1,
-        "book_id":        1,
-        "book_title":     "Thirty-six reasons for winning the lost",
-        "text":           "L'évangile doit être prêché.",
-        "alignment_text": "The gospel must be preached.",
-        "lang":           "fr",
-        "alignment_lang": "en",
+        "segment_id":       2,
+        "alignment_id":     1,
+        "book_id":          1,
+        "book_title":       "Thirty-six reasons for winning the lost",
+        "text":             "L'évangile doit être prêché.",
+        "text_highlighted": "L'<mark>évangile</mark> doit être prêché.",
+        "alignment_text":   "The gospel must be preached.",
+        "lang":             "fr",
+        "alignment_lang":   "en",
     }]
     with patch("app.api.dictionary._search_opensearch", return_value=fr_result):
         data = client.get("/search?q=évangile&lang=fr").json()

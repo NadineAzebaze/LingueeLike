@@ -63,6 +63,11 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
                     "minimum_should_match": 1
                 }
             },
+            "highlight": {
+                "pre_tags":  ["<mark style='background:#fde68a;padding:1px 3px;border-radius:3px;font-weight:600;'>"],
+                "post_tags": ["</mark>"],
+                "fields": {src_field: {"number_of_fragments": 0}}
+            },
             "size": limit,
             "sort": [
                 {"_score": "desc"},
@@ -75,15 +80,18 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
         results = []
         for hit in response["hits"]["hits"]:
             src = hit["_source"]
+            raw_text = src.get(src_field, "")
+            hl_frags = hit.get("highlight", {}).get(src_field, [])
             results.append({
-                "segment_id":     src.get(f"segment_id_{lang}"),
-                "alignment_id":   src.get(f"segment_id_{tgt_lang}"),
-                "book_id":        src.get("book_id"),
-                "book_title":     src.get("book_title", ""),
-                "text":           src.get(src_field, ""),
-                "alignment_text": src.get(f"text_{tgt_lang}", ""),
-                "lang":           lang,
-                "alignment_lang": tgt_lang,
+                "segment_id":       src.get(f"segment_id_{lang}"),
+                "alignment_id":     src.get(f"segment_id_{tgt_lang}"),
+                "book_id":          src.get("book_id"),
+                "book_title":       src.get("book_title", ""),
+                "text":             raw_text,
+                "text_highlighted": hl_frags[0] if hl_frags else raw_text,
+                "alignment_text":   src.get(f"text_{tgt_lang}", ""),
+                "lang":             lang,
+                "alignment_lang":   tgt_lang,
             })
 
         return results
@@ -142,6 +150,7 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
             "book_title":         item["book_title"],
             "language":           item["lang"],
             "text":               item["text"],
+            "text_highlighted":   item["text_highlighted"],
             "alignment_text":     item["alignment_text"] or None,
             "alignment_language": item["alignment_lang"],
             "alignment_id":       item["alignment_id"],

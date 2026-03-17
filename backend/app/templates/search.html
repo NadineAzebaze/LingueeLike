@@ -139,7 +139,7 @@
                     card.className = "bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-hidden fade-in";
                     card.style.animationDelay = `${idx * 0.05}s`;
 
-                    const highlightedText = highlightMatch(item.text, q);
+                    const highlightedText = item.text_highlighted || escapeHtml(item.text);
                     const highlights = item.alignment_highlights || [];
                     const alignmentHtml = item.alignment_text
                         ? `<p class="text-gray-800 leading-relaxed">${highlightWords(item.alignment_text, highlights)}</p>`
@@ -183,24 +183,6 @@
             const div = document.createElement("div");
             div.textContent = text;
             return div.innerHTML;
-        }
-
-        function highlightMatch(text, query) {
-            const escaped = escapeHtml(text);
-            const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
-            if (words.length === 0) return escaped;
-
-            const allPatterns = [query.trim(), ...words];
-            const unique = [...new Set(allPatterns)];
-
-            let result = escaped;
-            for (const word of unique) {
-                const wordEscaped = escapeHtml(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(${wordEscaped})`, "gi");
-                result = result.replace(regex,
-                    '<mark style="background:#fde68a;padding:1px 3px;border-radius:3px;font-weight:600;">$1</mark>');
-            }
-            return result;
         }
 
         function highlightWords(text, words) {
