@@ -8,14 +8,11 @@ from app.api.dictionary import get_db
 
 
 # ---------------------------------------------------------------------------
-# DB stub — returns an empty Book for any .get() call
+# DB stub — used only for WordTranslation/StemForm queries (highlighting)
 # ---------------------------------------------------------------------------
 
 def _make_db_stub():
     stub = MagicMock()
-    book = MagicMock()
-    book.title = "Thirty-six Reasons"
-    stub.get.return_value = book
     stub.query.return_value.filter_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
     stub.execute.return_value.scalars.return_value.all.return_value = []
     return stub
@@ -38,6 +35,7 @@ def _os_pair_result():
         "segment_id":     1,
         "alignment_id":   2,
         "book_id":        1,
+        "book_title":     "Thirty-six reasons for winning the lost",
         "text":           "The gospel must be preached.",
         "alignment_text": "L'évangile doit être prêché.",
         "lang":           "en",
@@ -70,8 +68,8 @@ def test_search_missing_query_returns_422(client):
     assert resp.status_code == 422
 
 
-def test_search_falls_back_to_sqlite_when_opensearch_fails(client):
-    """When OpenSearch returns None, the endpoint uses the SQLite fallback."""
+def test_search_returns_empty_when_opensearch_fails(client):
+    """When OpenSearch returns None, the endpoint returns an empty result set."""
     with patch("app.api.dictionary._search_opensearch", return_value=None):
         resp = client.get("/search?q=gospel&lang=en")
 
@@ -84,6 +82,7 @@ def test_search_fr_lang(client):
         "segment_id":     2,
         "alignment_id":   1,
         "book_id":        1,
+        "book_title":     "Thirty-six reasons for winning the lost",
         "text":           "L'évangile doit être prêché.",
         "alignment_text": "The gospel must be preached.",
         "lang":           "fr",

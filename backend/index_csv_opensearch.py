@@ -22,6 +22,7 @@ from app.search.index import INDEX_NAME, INDEX_MAPPING
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "../data/books/aligned_book.csv")
 BOOK_ID = 1
+BOOK_TITLE = "Thirty-six reasons for winning the lost"
 
 
 def _recreate_index(client):
@@ -42,6 +43,7 @@ def _iter_actions(csv_path):
                 "_source": {
                     "pair_id":       pos,
                     "book_id":       BOOK_ID,
+                    "book_title":    BOOK_TITLE,
                     "position":      pos,
                     "segment_id_en": pos * 2 - 1,
                     "segment_id_fr": pos * 2,

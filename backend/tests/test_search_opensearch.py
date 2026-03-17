@@ -19,6 +19,7 @@ def _make_hit(pair_id, text_en, text_fr, seg_en=None, seg_fr=None):
         "_source": {
             "pair_id":       pair_id,
             "book_id":       1,
+            "book_title":    "Thirty-six reasons for winning the lost",
             "position":      pair_id,
             "segment_id_en": seg_en or pair_id * 2 - 1,
             "segment_id_fr": seg_fr or pair_id * 2,
@@ -104,7 +105,7 @@ def test_no_secondary_get_call():
 
 
 def test_returns_none_on_exception():
-    """If OpenSearch raises, the function returns None (triggers SQLite fallback)."""
+    """If OpenSearch raises, the function returns None."""
     mock_client = MagicMock()
     mock_client.search.side_effect = ConnectionError("OpenSearch unavailable")
 
