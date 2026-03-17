@@ -1,0 +1,47 @@
+{
+  "index_patterns": ["segments"],
+  "settings": {
+    "analysis": {
+      "normalizer": {
+        "lowercase_ascii": {
+          "type": "custom",
+          "filter": ["lowercase", "asciifolding"]
+        }
+      },
+      "analyzer": {
+        "english_custom": { "type": "english" },
+        "french_custom":  { "type": "french"  }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "pair_id":       { "type": "integer" },
+      "book_id":       { "type": "integer" },
+      "book_title":    { "type": "keyword" },
+      "position":      { "type": "integer" },
+      "segment_id_en": { "type": "integer" },
+      "segment_id_fr": { "type": "integer" },
+      "text_en": {
+        "type":     "text",
+        "analyzer": "english_custom",
+        "fields": {
+          "normalized": {
+            "type":       "keyword",
+            "normalizer": "lowercase_ascii"
+          }
+        }
+      },
+      "text_fr": {
+        "type":     "text",
+        "analyzer": "french_custom",
+        "fields": {
+          "normalized": {
+            "type":       "keyword",
+            "normalizer": "lowercase_ascii"
+          }
+        }
+      }
+    }
+  }
+}

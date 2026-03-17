@@ -1,0 +1,9 @@
+# Logstash configuration for linguee_like
+#
+# pipeline.workers MUST stay at 1: the Ruby counter in the pipeline uses a
+# global variable ($pair_id) that is not thread-safe.
+
+pipeline.workers: 1
+pipeline.batch.size: 50
+
+log.level: info

@@ -1,11 +1,10 @@
 # backend/app/api/dictionary.py
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.db.models import Segment, Book, WordTranslation, StemForm
+from app.db.models import WordTranslation, StemForm
 from app.nlp.highlighter import find_highlights_in_text
 from app.nlp.stemmer import stem, clean_token as _clean, is_stop_word, other_lang
 from app.search.client import get_opensearch_client
@@ -80,6 +79,7 @@ def _search_opensearch(q_clean: str, lang: str, limit: int) -> list[dict] | None
                 "segment_id":     src.get(f"segment_id_{lang}"),
                 "alignment_id":   src.get(f"segment_id_{tgt_lang}"),
                 "book_id":        src.get("book_id"),
+                "book_title":     src.get("book_title", ""),
                 "text":           src.get(src_field, ""),
                 "alignment_text": src.get(f"text_{tgt_lang}", ""),
                 "lang":           lang,
@@ -128,25 +128,6 @@ def _lookup_translation_hints(query: str, lang: str, db: Session) -> list[str]:
     return hints
 
 
-def _build_result(segment, book, lang):
-    """SQLite fallback alignment."""
-    if lang == "en":
-        alignment = segment.alignments_en[0].segment_fr if segment.alignments_en else None
-    else:
-        alignment = segment.alignments_fr[0].segment_en if segment.alignments_fr else None
-
-    return {
-        "segment_id": segment.id,
-        "book_id": segment.book_id,
-        "book_title": book.title if book else "",
-        "language": segment.language,
-        "text": segment.text,
-        "alignment_text": alignment.text if alignment else None,
-        "alignment_language": alignment.language if alignment else None,
-        "alignment_id": alignment.id if alignment else None,
-    }
-
-
 @router.get("/search")
 def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: int = 20, db: Session = Depends(get_db)):
     q_clean = q.strip()
@@ -154,42 +135,17 @@ def search(q: str = Query(..., min_length=1), lang: str = Query("en"), limit: in
 
     opensearch_results = _search_opensearch(q_clean, lang, limit)
 
-    # Cache book titles to avoid repeated DB lookups
-    book_title_cache: dict[int, str] = {}
-
-    if opensearch_results is not None:
-        for item in opensearch_results:
-            book_id = item["book_id"]
-            if book_id not in book_title_cache:
-                book = db.get(Book, book_id)
-                book_title_cache[book_id] = book.title if book else ""
-
-            results.append({
-                "segment_id":         item["segment_id"],
-                "book_id":            book_id,
-                "book_title":         book_title_cache[book_id],
-                "language":           item["lang"],
-                "text":               item["text"],
-                "alignment_text":     item["alignment_text"] or None,
-                "alignment_language": item["alignment_lang"],
-                "alignment_id":       item["alignment_id"],
-            })
-    else:
-        # SQLite fallback
-        pattern = f"%{q_clean}%"
-        stmt = (
-            select(Segment.id)
-            .join(Book, Book.id == Segment.book_id)
-            .where(Segment.language == lang)
-            .where(Segment.text.ilike(pattern))
-            .limit(limit)
-        )
-        rows = db.execute(stmt).scalars().all()
-
-        for sid in rows:
-            segment = db.get(Segment, sid)
-            book = db.get(Book, segment.book_id)
-            results.append(_build_result(segment, book, lang))
+    for item in (opensearch_results or []):
+        results.append({
+            "segment_id":         item["segment_id"],
+            "book_id":            item["book_id"],
+            "book_title":         item["book_title"],
+            "language":           item["lang"],
+            "text":               item["text"],
+            "alignment_text":     item["alignment_text"] or None,
+            "alignment_language": item["alignment_lang"],
+            "alignment_id":       item["alignment_id"],
+        })
 
     # Skip DB hint lookup when there is nothing to highlight
     if results:

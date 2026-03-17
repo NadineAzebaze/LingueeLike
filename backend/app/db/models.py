@@ -2,17 +2,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 
-from .database import Base, engine
-
-# Detect real database dialect (sqlite, postgresql, etc.)
-dialect = engine.url.get_dialect().name
-
-# Choose TSVECTOR only if the actual DB is PostgreSQL
-if dialect == "postgresql":
-    from sqlalchemy.dialects.postgresql import TSVECTOR
-    TSVECTOR_TYPE = TSVECTOR
-else:
-    TSVECTOR_TYPE = Text
+from .database import Base
 
 
 class Book(Base):
@@ -36,9 +26,6 @@ class Segment(Base):
     position = Column(Integer, index=True)
     language = Column(String(2), index=True)  # 'fr' or 'en'
     text = Column(Text, nullable=False)
-
-    # TSVECTOR on PostgreSQL, Text on SQLite
-    search_vector = Column(TSVECTOR_TYPE, nullable=True)
 
     book = relationship("Book", back_populates="segments")
     alignments_fr = relationship(

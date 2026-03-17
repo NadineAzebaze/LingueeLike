@@ -53,7 +53,7 @@ linguee_like/
 │   │   │   └── import_md.py          # Pipeline d'import CSV
 │   │   ├── search/
 │   │   │   ├── client.py             # Client OpenSearch singleton
-│   │   │   └── index.py              # Mapping de l'index + helpers création/suppression
+│   │   │   └── index.py              # Mapping de l'index OpenSearch
 │   │   └── templates/
 │   │       └── search.html           # Interface de recherche (Tailwind CSS)
 │   ├── tests/
@@ -62,14 +62,22 @@ linguee_like/
 │   │   ├── test_search_opensearch.py # Tests requête OpenSearch (client mocké)
 │   │   ├── test_search_endpoint.py   # Tests endpoint FastAPI (OpenSearch + DB mockés)
 │   │   └── test_index_mapping.py     # Tests structure du mapping
-│   ├── index_csv_opensearch.py       # Indexation du CSV dans OpenSearch
-│   └── import_md_runner.py           # Import du CSV dans SQLite
+│   └── index_csv_opensearch.py       # Indexation du CSV dans OpenSearch (alternative dev)
+│
+├── logstash/
+│   ├── pipeline/
+│   │   └── linguee.conf          # Pipeline ETL : CSV → paires OpenSearch
+│   ├── config/
+│   │   └── logstash.yml          # workers: 1 (compteur Ruby thread-safe)
+│   └── templates/
+│       └── segments.json         # Template de mapping OpenSearch
 │
 ├── data/
 │   └── books/
 │       ├── aligned_book.csv                                     # Paires de phrases EN/FR alignées
 │       ├── thirty-six-reasons-for-winning-the-lost_interior.md  # Livre source EN
 │       └── trente-six-raisons-de-gagner-les-perdus_interieur.md # Livre source FR
+├── docker-compose.yml
 └── README.md
 ```
 
@@ -113,7 +121,7 @@ Chaque champ dispose d'un sous-champ `.normalized` (keyword lowercase+asciifoldi
 ### Prérequis
 
 - Python 3.11+
-- Docker (pour OpenSearch)
+- Docker + Docker Compose
 
 ### 1. Cloner le projet
 
@@ -125,10 +133,10 @@ cd linguee_like
 ### 2. Démarrer OpenSearch
 
 ```bash
-docker compose up -d
+docker compose up -d opensearch
 ```
 
-Attendez quelques secondes puis vérifiez : `curl http://localhost:9200`
+Attendez que le healthcheck passe : `curl http://localhost:9200/_cluster/health`
 
 ### 3. Configurer l'environnement Python
 
@@ -140,29 +148,25 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-### 4. Initialiser la base de données
+### 4. Importer le livre dans SQLite
 
 ```bash
-python data/scripts/init_db.py
+python app/scripts/import_md.py
 ```
 
-### 5. Importer le livre dans SQLite
+Crée les livres, segments, alignements et l'index de traduction de mots. Les tables sont créées automatiquement au premier lancement.
+
+### 5. Indexer dans OpenSearch via Logstash
 
 ```bash
-python import_md_runner.py
+docker compose run --rm logstash
 ```
 
-Cela crée les livres, segments, alignements et l'index de traduction de mots.
+Logstash lit `data/books/aligned_book.csv`, transforme chaque ligne en document paire bilingue et le pousse dans OpenSearch. Le mapping est appliqué automatiquement via le template `logstash/templates/segments.json`. Le conteneur quitte une fois le fichier entièrement traité.
 
-### 6. Indexer dans OpenSearch
+> **Alternative sans Docker** (développement) : `cd backend && python index_csv_opensearch.py`
 
-```bash
-python index_csv_opensearch.py
-```
-
-Le script recrée l'index (mapping inclus) et indexe toutes les paires en bulk.
-
-### 7. Lancer l'API
+### 6. Lancer l'API
 
 ```bash
 uvicorn app.main:app --reload
@@ -187,8 +191,9 @@ python -m pytest tests/ -v
 ## Ajouter un nouveau livre
 
 1. Ajoutez le CSV aligné dans `data/books/` (colonnes : `en`, `fr`)
-2. Modifiez `import_md_runner.py` avec les métadonnées du nouveau livre et exécutez-le
-3. Relancez `index_csv_opensearch.py` pour réindexer dans OpenSearch
+2. Modifiez le bloc `__main__` dans `app/scripts/import_md.py` avec les métadonnées du nouveau livre et exécutez-le
+3. Mettez à jour `path` dans `logstash/pipeline/linguee.conf` si le nom du fichier change
+4. Relancez `docker compose run --rm logstash` pour réindexer dans OpenSearch
 
 ---
 
@@ -213,7 +218,7 @@ python -m pytest tests/ -v
     {
       "segment_id": 1,
       "book_id": 1,
-      "book_title": "Thirty Six Reasons for Winning the Lost (EN)",
+      "book_title": "Thirty-six reasons for winning the lost",
       "language": "en",
       "text": "The Lord Jesus came to seek and to save the lost.",
       "alignment_text": "Le Seigneur Jésus est venu chercher et sauver les perdus.",
@@ -237,5 +242,3 @@ python -m pytest tests/ -v
 | `soul`    | A **soul**-winning church...         | Une église qui gagne les **âmes**...     | âmes                |
 | `church`  | A soul-winning **church**...         | Une **église** qui gagne...              | église              |
 | `perdus`  | ...sauver les **perdus**             | ...to save the **lost**                  | lost                |
-
-La recherche bascule automatiquement sur SQLite ILIKE si OpenSearch est indisponible.

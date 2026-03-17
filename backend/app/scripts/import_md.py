@@ -95,11 +95,23 @@ def import_aligned_csv(
     index_count = build_word_index(db)
     print(f"Word translation index rebuilt: {index_count} entries")
 
-    # Index into OpenSearch (non-blocking — import works without it)
-    try:
-        from app.search.sync import index_segments
-        index_segments(new_segments)
-    except Exception as e:
-        print(f"OpenSearch indexing skipped: {e}")
-
     return book_en, book_fr, len(pairs)
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    from app.db.database import SessionLocal
+
+    db = SessionLocal()
+    csv_path = Path(__file__).parents[3] / "data" / "books" / "aligned_book.csv"
+
+    book_en, book_fr, count = import_aligned_csv(
+        db=db,
+        csv_path=str(csv_path),
+        title="Thirty-six reasons for winning the lost",
+        author="Zacharias Tanee Fomum",
+        year=2004,
+    )
+    print(f"Book EN: {book_en.title} (id={book_en.id})")
+    print(f"Book FR: {book_fr.title} (id={book_fr.id})")
+    print(f"Aligned segments imported: {count}")

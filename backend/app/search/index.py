@@ -1,6 +1,5 @@
 # backend/app/search/index.py
 
-from app.search.client import get_opensearch_client
 from app.core.config import settings
 
 INDEX_NAME = settings.OPENSEARCH_INDEX
@@ -26,6 +25,7 @@ INDEX_MAPPING = {
         "properties": {
             "pair_id":       {"type": "integer"},
             "book_id":       {"type": "integer"},
+            "book_title":    {"type": "keyword"},
             "position":      {"type": "integer"},
             "segment_id_en": {"type": "integer"},
             "segment_id_fr": {"type": "integer"},
@@ -57,14 +57,3 @@ INDEX_MAPPING = {
     }
 }
 
-
-def create_index(client=None):
-    client = client or get_opensearch_client()
-    client.indices.create(index=INDEX_NAME, body=INDEX_MAPPING, ignore=400)
-    print(f"Created index '{INDEX_NAME}'")
-
-
-def delete_index(client=None):
-    client = client or get_opensearch_client()
-    client.indices.delete(index=INDEX_NAME, ignore=404)
-    print(f"Deleted index '{INDEX_NAME}'")
